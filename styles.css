@@ -481,11 +481,18 @@ html, body {
   font-weight: 800;
   font-family: inherit;
   text-transform: lowercase;
-  cursor: pointer;
+  cursor: grab;
   box-shadow: var(--shadow);
-  transition: transform 0.1s;
+  touch-action: none; /* let us handle drag without the page scrolling */
+  user-select: none;
+  transition: transform 0.1s, box-shadow 0.1s;
 }
-.tile:active { transform: scale(0.9); }
+.tile:active { transform: scale(0.94); }
+.tile.dragging {
+  cursor: grabbing;
+  transform: scale(1.12) rotate(-3deg);
+  box-shadow: 0 12px 28px rgba(40, 30, 90, 0.35);
+}
 .tile-slot .tile {
   background: linear-gradient(150deg, #45d4b6, #23a58c);
   color: #fff;

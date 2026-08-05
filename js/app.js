@@ -471,13 +471,15 @@
     if (useTiles) {
       const answer = item.word.toLowerCase();
       const letters = answer.split("");
-      // Older kids get a couple of extra "distractor" tiles for more challenge.
-      if (player.ageBand === "middle") {
-        const alphabet = "abcdefghijklmnopqrstuvwxyz";
-        for (let i = 0; i < 2; i++) {
-          letters.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
-        }
-      }
+      // Always mix in extra "distractor" letters that are NOT part of the word,
+      // so the tray is a random set the child has to choose from — not just the
+      // exact letters rearranged. Older kids get a few more.
+      const extraCount = player.ageBand === "middle" ? 5 : 3;
+      const used = new Set(letters);
+      const pool = shuffleInPlace(
+        "abcdefghijklmnopqrstuvwxyz".split("").filter((c) => !used.has(c))
+      );
+      pool.slice(0, extraCount).forEach((c) => letters.push(c));
       shuffleInPlace(letters);
       const slotsHtml = answer
         .split("")
@@ -647,28 +649,120 @@
     if (check) check.disabled = true;
   }
 
-  // Wire tap-to-place behavior for the letter tiles.
+  // Wire the letter tiles. Supports BOTH dragging a tile onto a slot and simply
+  // tapping it (tap = place in next empty slot / send back to tray). Uses
+  // Pointer Events so it behaves the same with a finger, stylus, or mouse.
   function wireTiles(node) {
     const area = node.querySelector(".tiles-area");
     const tray = node.querySelector(".tile-tray");
     const check = node.querySelector('.tiles-controls [data-action="check"]');
     const slots = () => Array.from(node.querySelectorAll(".tile-slot"));
+    const DRAG_THRESHOLD = 6; // px of movement before it counts as a drag
 
     function refresh() {
       check.disabled = !slots().every((s) => s.querySelector(".tile"));
     }
-    area.addEventListener("click", (e) => {
+    function nextEmptySlot() {
+      return slots().find((s) => !s.querySelector(".tile"));
+    }
+    function placeInSlot(tile, slot) {
+      const occupant = slot.querySelector(".tile");
+      if (occupant && occupant !== tile) tray.appendChild(occupant); // swap out
+      slot.appendChild(tile);
+    }
+
+    let active = null;
+
+    function clearDragStyle(t) {
+      t.classList.remove("dragging");
+      t.style.position = t.style.left = t.style.top = "";
+      t.style.width = t.style.height = t.style.zIndex = t.style.pointerEvents = "";
+    }
+    function beginDrag() {
+      active.dragging = true;
+      const t = active.tile;
+      t.classList.add("dragging");
+      t.style.position = "fixed";
+      t.style.width = active.w + "px";
+      t.style.height = active.h + "px";
+      t.style.zIndex = "1000";
+      t.style.pointerEvents = "none"; // so elementFromPoint sees the slot below
+      moveTo(active.lastX, active.lastY);
+    }
+    function moveTo(x, y) {
+      active.tile.style.left = x - active.offsetX + "px";
+      active.tile.style.top = y - active.offsetY + "px";
+    }
+
+    function onDown(e) {
       const tile = e.target.closest(".tile");
-      if (!tile || tile.classList.contains("locked")) return;
-      audio.tap();
-      if (tile.parentElement.classList.contains("tile-slot")) {
-        tray.appendChild(tile); // tap a placed tile -> send back
-      } else {
-        const empty = slots().find((s) => !s.querySelector(".tile"));
-        if (empty) empty.appendChild(tile); // tap a tray tile -> next slot
+      if (!tile || tile.classList.contains("locked") || !area.contains(tile)) return;
+      e.preventDefault();
+      const rect = tile.getBoundingClientRect();
+      active = {
+        tile,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastX: e.clientX,
+        lastY: e.clientY,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+        w: rect.width,
+        h: rect.height,
+        dragging: false,
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onCancel);
+    }
+    function onMove(e) {
+      if (!active) return;
+      active.lastX = e.clientX;
+      active.lastY = e.clientY;
+      if (!active.dragging) {
+        if (Math.hypot(e.clientX - active.startX, e.clientY - active.startY) > DRAG_THRESHOLD) beginDrag();
+        else return;
       }
+      e.preventDefault();
+      moveTo(e.clientX, e.clientY);
+    }
+    function stop() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    }
+    function onUp(e) {
+      stop();
+      if (!active) return;
+      const t = active.tile;
+      if (active.dragging) {
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        clearDragStyle(t);
+        const slot = target && target.closest ? target.closest(".tile-slot") : null;
+        if (slot && area.contains(slot)) placeInSlot(t, slot);
+        else tray.appendChild(t); // dropped on the tray or anywhere else
+      } else {
+        // Treated as a tap.
+        if (t.parentElement.classList.contains("tile-slot")) tray.appendChild(t);
+        else {
+          const empty = nextEmptySlot();
+          if (empty) empty.appendChild(t);
+        }
+      }
+      audio.tap();
+      active = null;
       refresh();
-    });
+    }
+    function onCancel() {
+      stop();
+      if (!active) return;
+      clearDragStyle(active.tile);
+      tray.appendChild(active.tile);
+      active = null;
+      refresh();
+    }
+
+    area.addEventListener("pointerdown", onDown);
     refresh();
   }
 
