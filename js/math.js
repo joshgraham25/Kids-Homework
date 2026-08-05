@@ -1,7 +1,7 @@
 /*
- * math.js — generates math questions tuned to an age band and operation.
+ * math.js — generates math questions tuned to a grade level and operation.
  * Returns questions as { text, answer, choices } where choices are used for
- * the younger tap-to-answer mode.
+ * the younger grades' tap-to-answer mode.
  */
 (function () {
   const HW = (window.HW = window.HW || {});
@@ -10,30 +10,39 @@
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  // Difficulty ranges per age band.
+  // Operand ranges per grade. Ranges are chosen so sums/answers land in the
+  // range that grade typically practices (e.g. "within 20" for 1st grade).
   const RANGES = {
-    young: { add: [1, 10], sub: [1, 10], mul: null, div: null },
-    middle: { add: [10, 99], sub: [10, 99], mul: [2, 12], div: [2, 12] },
+    K: { add: [0, 5], sub: [0, 10], mul: null, div: null },
+    "1": { add: [1, 10], sub: [1, 20], mul: null, div: null },
+    "2": { add: [10, 50], sub: [10, 99], mul: null, div: null },
+    "3": { add: [10, 50], sub: [10, 99], mul: [2, 10], div: [2, 10] },
+    "4": { add: [50, 500], sub: [100, 999], mul: [2, 12], div: [2, 12] },
+    "5": { add: [100, 500], sub: [100, 999], mul: [3, 12], div: [3, 12] },
   };
 
-  // Which operations are offered for each age band.
+  // Which operations each grade practices.
+  const ADD = { id: "add", label: "Adding", emoji: "➕" };
+  const SUB = { id: "sub", label: "Subtracting", emoji: "➖" };
+  const SUB_YOUNG = { id: "sub", label: "Taking Away", emoji: "➖" };
+  const MUL = { id: "mul", label: "Times Tables", emoji: "✖️" };
+  const DIV = { id: "div", label: "Dividing", emoji: "➗" };
+  const MIX = { id: "mix", label: "Mix It Up", emoji: "🎲" };
+
   const OPS = {
-    young: [
-      { id: "add", label: "Adding", emoji: "➕" },
-      { id: "sub", label: "Taking Away", emoji: "➖" },
-      { id: "mix", label: "Mix It Up", emoji: "🎲" },
-    ],
-    middle: [
-      { id: "add", label: "Adding", emoji: "➕" },
-      { id: "sub", label: "Subtracting", emoji: "➖" },
-      { id: "mul", label: "Times Tables", emoji: "✖️" },
-      { id: "div", label: "Dividing", emoji: "➗" },
-      { id: "mix", label: "Mix It Up", emoji: "🎲" },
-    ],
+    K: [ADD, SUB_YOUNG, MIX],
+    "1": [ADD, SUB_YOUNG, MIX],
+    "2": [ADD, SUB, MIX],
+    "3": [ADD, SUB, MUL, DIV, MIX],
+    "4": [ADD, SUB, MUL, DIV, MIX],
+    "5": [ADD, SUB, MUL, DIV, MIX],
   };
 
-  function makeOne(op, ageBand) {
-    const r = RANGES[ageBand] || RANGES.young;
+  // Grades that type answers vs. tap a multiple choice. The youngest tap.
+  const TYPED = { K: false, "1": false, "2": true, "3": true, "4": true, "5": true };
+
+  function makeOne(op, grade) {
+    const r = RANGES[grade] || RANGES.K;
     let a, b, answer, text;
 
     if (op === "add") {
@@ -59,8 +68,8 @@
       a = b * answer;
       text = `${a} ÷ ${b}`;
     } else {
-      // Fallback / unsupported op for this band -> addition.
-      return makeOne("add", ageBand);
+      // Fallback / unsupported op for this grade -> addition.
+      return makeOne("add", grade);
     }
 
     return { text: text + " = ?", answer };
@@ -77,7 +86,6 @@
       if (cand < 0) cand = Math.abs(cand);
       if (cand !== answer) choices.add(cand);
     }
-    // Shuffle.
     const arr = Array.from(choices);
     for (let i = arr.length - 1; i > 0; i--) {
       const j = rnd(0, i);
@@ -87,19 +95,23 @@
   }
 
   HW.math = {
-    operations(ageBand) {
-      return (OPS[ageBand] || OPS.young).slice();
+    operations(grade) {
+      return (OPS[grade] || OPS.K).slice();
+    },
+    // True if this grade types its answers; false = tap a multiple choice.
+    typedInput(grade) {
+      return !!TYPED[grade];
     },
     // Generate a question. For "mix", pick a random supported op.
-    generate(op, ageBand) {
+    generate(op, grade) {
       let realOp = op;
       if (op === "mix") {
-        const pool = (OPS[ageBand] || OPS.young)
+        const pool = (OPS[grade] || OPS.K)
           .map((o) => o.id)
           .filter((id) => id !== "mix");
         realOp = pool[rnd(0, pool.length - 1)];
       }
-      const q = makeOne(realOp, ageBand);
+      const q = makeOne(realOp, grade);
       q.choices = makeChoices(q.answer);
       q.op = realOp;
       return q;

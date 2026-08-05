@@ -129,10 +129,13 @@
   // =========================================================
   function screenCreate() {
     let avatar = store.AVATARS[0];
-    let ageBand = "young";
+    let grade = store.GRADES[0].id;
 
     const avatars = store.AVATARS.map(
       (a, i) => `<button class="avatar-pick ${i === 0 ? "sel" : ""}" data-avatar="${a}">${a}</button>`
+    ).join("");
+    const grades = store.GRADES.map(
+      (g, i) => `<button class="grade-btn ${i === 0 ? "sel" : ""}" data-grade="${g.id}"><span class="grade-short">${g.short}</span><span class="grade-label">${esc(g.label)}</span></button>`
     ).join("");
 
     const node = el(`
@@ -145,11 +148,8 @@
           <label class="field-label">Pick your hero</label>
           <div class="avatar-grid">${avatars}</div>
 
-          <label class="field-label">How old are you?</label>
-          <div class="age-pick">
-            <button class="age-btn sel" data-age="young">5–7 years</button>
-            <button class="age-btn" data-age="middle">8–10 years</button>
-          </div>
+          <label class="field-label">What grade are you in?</label>
+          <div class="grade-grid">${grades}</div>
 
           <button class="big-btn go" data-action="save">Start! 🚀</button>
         </div>
@@ -162,10 +162,10 @@
       node.querySelectorAll(".avatar-pick").forEach((b) => b.classList.remove("sel"));
       e.currentTarget.classList.add("sel");
     });
-    on(node, "[data-age]", "click", (e) => {
+    on(node, "[data-grade]", "click", (e) => {
       audio.tap();
-      ageBand = e.currentTarget.getAttribute("data-age");
-      node.querySelectorAll(".age-btn").forEach((b) => b.classList.remove("sel"));
+      grade = e.currentTarget.getAttribute("data-grade");
+      node.querySelectorAll(".grade-btn").forEach((b) => b.classList.remove("sel"));
       e.currentTarget.classList.add("sel");
     });
     on(node, "[data-action=save]", "click", () => {
@@ -175,7 +175,7 @@
         node.querySelector("#name").focus();
         return;
       }
-      store.addPlayer(name, avatar, ageBand);
+      store.addPlayer(name, avatar, grade);
       audio.fanfare();
       celebrate();
       go("home");
@@ -238,7 +238,7 @@
   function screenMathSetup() {
     const p = store.getCurrent();
     if (!p) return go("profiles");
-    const ops = math.operations(p.ageBand);
+    const ops = math.operations(p.grade);
     const buttons = ops
       .map(
         (o) => `<button class="op-btn" data-op="${o.id}"><span class="op-sym">${o.emoji}</span><span>${esc(o.label)}</span></button>`
@@ -270,21 +270,21 @@
     game = {
       subject: "math",
       op,
-      ageBand: p.ageBand,
+      grade: p.grade,
       index: 0,
       correct: 0,
       streak: 0,
       bestStreak: 0,
       starsEarned: 0,
       newBadges: [],
-      typed: p.ageBand === "middle", // older kids type; younger kids tap
+      typed: math.typedInput(p.grade), // upper grades type; earliest grades tap
     };
     nextMath();
   }
 
   function nextMath() {
     if (game.index >= ROUND_LEN) return finishRound();
-    const q = math.generate(game.op, game.ageBand);
+    const q = math.generate(game.op, game.grade);
     game.current = q;
 
     const progress = `${game.index + 1} / ${ROUND_LEN}`;
@@ -474,7 +474,7 @@
       // Always mix in extra "distractor" letters that are NOT part of the word,
       // so the tray is a random set the child has to choose from — not just the
       // exact letters rearranged. Older kids get a few more.
-      const extraCount = player.ageBand === "middle" ? 5 : 3;
+      const extraCount = player.grade === "K" || player.grade === "1" ? 3 : 5;
       const used = new Set(letters);
       const pool = shuffleInPlace(
         "abcdefghijklmnopqrstuvwxyz".split("").filter((c) => !used.has(c))
@@ -885,6 +885,15 @@
 
         ${p ? `
         <div class="card">
+          <h2 class="section-title flush">🎓 ${esc(p.name)}'s grade level</h2>
+          <p class="muted small">Sets how hard the math and spelling are. Move it up as they grow.</p>
+          <div class="grade-grid">
+            ${store.GRADES.map((g) => `<button class="grade-btn ${p.grade === g.id ? "sel" : ""}" data-setgrade="${g.id}"><span class="grade-short">${g.short}</span><span class="grade-label">${esc(g.label)}</span></button>`).join("")}
+          </div>
+        </div>` : ""}
+
+        ${p ? `
+        <div class="card">
           <h2 class="section-title flush">✏️ How ${esc(p.name)} answers spelling</h2>
           <div class="age-pick">
             <button class="age-btn ${(p.spellInput || "keyboard") === "keyboard" ? "sel" : ""}" data-input="keyboard">⌨️ Keyboard</button>
@@ -912,6 +921,15 @@
         <p class="muted small center">All progress is saved on this device only. Nothing is sent anywhere.</p>
       </div>
     `);
+
+    on(node, "[data-setgrade]", "click", (e) => {
+      audio.tap();
+      const g = e.currentTarget.getAttribute("data-setgrade");
+      store.updatePlayer(p.id, { grade: g });
+      node.querySelectorAll("[data-setgrade]").forEach((b) => b.classList.remove("sel"));
+      e.currentTarget.classList.add("sel");
+      toast(`${p.name} is now in ${store.gradeLabel(g)}`, "🎓");
+    });
 
     on(node, "[data-input]", "click", (e) => {
       audio.tap();

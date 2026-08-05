@@ -21,8 +21,8 @@
       const list = [];
       list.push({
         id: "builtin",
-        name: HW.words.builtinLabel(player.ageBand),
-        words: HW.words.builtin(player.ageBand),
+        name: HW.words.builtinLabel(player.grade),
+        words: HW.words.builtin(player.grade),
       });
       (player.customWords || []).forEach((cl) => {
         list.push({

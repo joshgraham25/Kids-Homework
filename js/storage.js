@@ -9,8 +9,31 @@
 
   const AVATARS = ["🦸", "🦹", "🐱", "🐶", "🦊", "🐼", "🦄", "🐸", "🐙", "🦖", "🌟", "🚀"];
 
+  // Grade levels the app supports (elementary K–5).
+  const GRADES = [
+    { id: "K", label: "Kindergarten", short: "K" },
+    { id: "1", label: "1st Grade", short: "1" },
+    { id: "2", label: "2nd Grade", short: "2" },
+    { id: "3", label: "3rd Grade", short: "3" },
+    { id: "4", label: "4th Grade", short: "4" },
+    { id: "5", label: "5th Grade", short: "5" },
+  ];
+  const GRADE_IDS = GRADES.map((g) => g.id);
+
   function blankState() {
     return { players: [], currentId: null };
+  }
+
+  // Bring older saved profiles up to date: give everyone a `grade`, mapping the
+  // previous age bands (young 5–7, middle 8–10) onto a sensible starting grade.
+  function migrate(data) {
+    (data.players || []).forEach((p) => {
+      if (!p.grade || GRADE_IDS.indexOf(p.grade) === -1) {
+        p.grade = p.ageBand === "middle" ? "3" : p.ageBand === "young" ? "1" : "K";
+      }
+      if (!p.spellInput) p.spellInput = "keyboard";
+    });
+    return data;
   }
 
   function load() {
@@ -19,7 +42,7 @@
       if (!raw) return blankState();
       const data = JSON.parse(raw);
       if (!data || !Array.isArray(data.players)) return blankState();
-      return data;
+      return migrate(data);
     } catch (e) {
       return blankState();
     }
@@ -39,8 +62,17 @@
     return "p_" + Math.random().toString(36).slice(2, 9);
   }
 
+  // Write any migration changes back to storage right away (state is assigned
+  // by now, so persist() is safe to call).
+  persist();
+
   const store = {
     AVATARS,
+    GRADES,
+    gradeLabel(id) {
+      const g = GRADES.find((x) => x.id === id);
+      return g ? g.label : GRADES[0].label;
+    },
 
     getPlayers() {
       return state.players.slice();
@@ -55,12 +87,12 @@
       persist();
     },
 
-    addPlayer(name, avatar, ageBand) {
+    addPlayer(name, avatar, grade) {
       const player = {
         id: uid(),
         name: (name || "Hero").trim().slice(0, 16) || "Hero",
         avatar: avatar || AVATARS[0],
-        ageBand: ageBand || "young", // "young" (5-7) or "middle" (8-10)
+        grade: GRADE_IDS.indexOf(grade) !== -1 ? grade : "K", // "K"–"5"
         spellInput: "keyboard", // "keyboard" or "tiles" (how they answer spelling)
         stars: 0,
         badges: [],
