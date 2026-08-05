@@ -132,6 +132,7 @@ html, body {
 .subject-card.spell { background: linear-gradient(150deg, #45d4b6, #23a58c); }
 .subject-card.trophy { background: linear-gradient(150deg, #ffd85e, #ffb01f); color: #6a4b00; }
 .subject-card.switch { background: linear-gradient(150deg, #6ea0ff, #4d7bff); }
+.subject-card.search { background: linear-gradient(150deg, #b06cff, #7d3ff2); }
 
 /* ---------- welcome ---------- */
 .welcome {
@@ -600,7 +601,64 @@ html, body {
   to { transform: translateY(105vh) rotate(360deg); opacity: 0.2; }
 }
 
+/* ---------- word search ---------- */
+.ws-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 10px 0 14px;
+}
+.ws-word {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-weight: 800;
+  text-transform: lowercase;
+  box-shadow: var(--shadow);
+}
+.ws-word.done {
+  background: var(--good);
+  color: #fff;
+  text-decoration: line-through;
+  opacity: 0.85;
+}
+.ws-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--n), 1fr);
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.28);
+  padding: 6px;
+  border-radius: 16px;
+  touch-action: none; /* let us handle drag without scrolling the page */
+  user-select: none;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.ws-cell {
+  aspect-ratio: 1 / 1;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: var(--fs, 1rem);
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+.ws-cell.sel { background: #ffe15e; color: #6a4b00; }
+.ws-cell.found { background: var(--good); color: #fff; }
+.ws-cell.found.sel { background: #1e9e63; }
+
 @media (max-width: 380px) {
   .question-text { font-size: 2.4rem; }
   .avatar-grid { grid-template-columns: repeat(4, 1fr); }
+  .ws-cell { border-radius: 6px; }
 }

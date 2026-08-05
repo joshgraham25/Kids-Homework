@@ -215,6 +215,11 @@
             <span class="subject-name">Spelling</span>
             <span class="subject-desc">Hear & type words</span>
           </button>
+          <button class="subject-card search" data-nav="ws-setup">
+            <span class="subject-emoji">🔍</span>
+            <span class="subject-name">Word Search</span>
+            <span class="subject-desc">Find hidden words</span>
+          </button>
           <button class="subject-card trophy" data-nav="badges">
             <span class="subject-emoji">🏆</span>
             <span class="subject-name">My Trophies</span>
@@ -813,6 +818,214 @@
   }
 
   // =========================================================
+  // SCREEN: Word Search setup (pick a word list)
+  // =========================================================
+  function screenWSSetup() {
+    const p = store.getCurrent();
+    if (!p) return go("profiles");
+    const sources = spelling.sources(p); // built-in grade list + custom lists
+    const cards = sources
+      .map(
+        (s) => `
+        <button class="list-card" data-source="${s.id}">
+          <span class="list-emoji">${s.custom ? "📝" : "🔍"}</span>
+          <span class="list-name">${esc(s.name)}</span>
+          <span class="list-count">${s.words.length} words</span>
+        </button>`
+      )
+      .join("");
+    const node = el(`
+      <div class="screen">
+        ${header("Word Search", { back: "home" })}
+        <h2 class="section-title">Which words should we hide?</h2>
+        <div class="list-grid">${cards}</div>
+      </div>
+    `);
+    on(node, "[data-source]", "click", (e) => {
+      audio.tap();
+      startWordSearch(e.currentTarget.getAttribute("data-source"));
+    });
+    wireNav(node);
+    render(node);
+  }
+
+  function startWordSearch(sourceId) {
+    const p = store.getCurrent();
+    const sources = spelling.sources(p);
+    const source = sources.find((s) => s.id === sourceId) || sources[0];
+    let puzzle = HW.wordsearch.build(source.words.map((w) => w.word), p.grade);
+    // If none of a custom list's words fit the grid, fall back to grade words.
+    if (!puzzle.placed.length) {
+      puzzle = HW.wordsearch.build(HW.words.builtin(p.grade).map((w) => w.word), p.grade);
+    }
+    if (!puzzle.placed.length) {
+      toast("Couldn't build a puzzle from those words", "🔍");
+      return go("ws-setup");
+    }
+    game = {
+      subject: "wordsearch",
+      puzzle: puzzle,
+      total: puzzle.placed.length,
+      found: 0,
+      starsEarned: 0,
+      newBadges: [],
+      sourceId: sourceId,
+    };
+    screenWordSearch();
+  }
+
+  function screenWordSearch() {
+    const puzzle = game.puzzle;
+    const size = puzzle.size;
+    // Font shrinks a little as the grid grows so it fits on a phone.
+    const fs = Math.max(0.72, 1.55 - size * 0.06).toFixed(2);
+
+    let cells = "";
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        cells += `<button type="button" class="ws-cell" data-r="${r}" data-c="${c}">${esc(puzzle.grid[r][c].toUpperCase())}</button>`;
+      }
+    }
+    const wordChips = puzzle.placed
+      .map((pw) => `<span class="ws-word ${pw.found ? "done" : ""}" data-word="${esc(pw.word)}">${esc(pw.word)}</span>`)
+      .join("");
+
+    const node = el(`
+      <div class="screen play">
+        ${header("Word Search", { back: "home" })}
+        <div class="play-meta">
+          <span class="pill" id="ws-count">🔍 Found ${game.found} / ${game.total}</span>
+        </div>
+        <div class="ws-words">${wordChips}</div>
+        <div class="ws-grid" style="--n:${size}; --fs:${fs}rem">${cells}</div>
+        <p class="muted small center">Drag across the letters to find each word.</p>
+      </div>
+    `);
+    wireWordSearch(node);
+    wireNav(node);
+    render(node);
+  }
+
+  function sameCells(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].r !== b[i].r || a[i].c !== b[i].c) return false;
+    }
+    return true;
+  }
+
+  // Drag-to-select letters along a straight line (any of 8 directions).
+  function wireWordSearch(node) {
+    const grid = node.querySelector(".ws-grid");
+    const cellAt = (r, c) => grid.querySelector(`.ws-cell[data-r="${r}"][data-c="${c}"]`);
+    let selecting = false;
+    let startCell = null;
+    let current = [];
+
+    function clearSel() {
+      grid.querySelectorAll(".ws-cell.sel").forEach((x) => x.classList.remove("sel"));
+    }
+    function setSel(cells) {
+      clearSel();
+      cells.forEach((c) => c.classList.add("sel"));
+      current = cells;
+    }
+    function lineCells(a, b) {
+      const r1 = +a.dataset.r, c1 = +a.dataset.c, r2 = +b.dataset.r, c2 = +b.dataset.c;
+      const dr = Math.sign(r2 - r1), dc = Math.sign(c2 - c1);
+      const rr = Math.abs(r2 - r1), cc = Math.abs(c2 - c1);
+      let steps;
+      if (r1 === r2) steps = cc;
+      else if (c1 === c2) steps = rr;
+      else if (rr === cc) steps = rr;
+      else return null; // not a straight line
+      const out = [];
+      for (let i = 0; i <= steps; i++) out.push(cellAt(r1 + dr * i, c1 + dc * i));
+      return out.every(Boolean) ? out : null;
+    }
+    function onDown(e) {
+      const cell = e.target.closest(".ws-cell");
+      if (!cell) return;
+      e.preventDefault();
+      selecting = true;
+      startCell = cell;
+      setSel([cell]);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    }
+    function onMove(e) {
+      if (!selecting) return;
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      const cell = target && target.closest ? target.closest(".ws-cell") : null;
+      if (!cell || !grid.contains(cell)) return;
+      const line = lineCells(startCell, cell);
+      if (line) setSel(line);
+    }
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (!selecting) return;
+      selecting = false;
+      evaluate();
+      clearSel();
+    }
+    function evaluate() {
+      if (!current || current.length < 2) return;
+      const coords = current.map((x) => ({ r: +x.dataset.r, c: +x.dataset.c }));
+      for (const pw of game.puzzle.placed) {
+        if (pw.found) continue;
+        if (sameCells(coords, pw.cells) || sameCells(coords, pw.cells.slice().reverse())) {
+          pw.found = true;
+          game.found++;
+          current.forEach((x) => x.classList.add("found"));
+          const chip = node.querySelector(`.ws-word[data-word="${pw.word}"]`);
+          if (chip) chip.classList.add("done");
+          const rec = store.recordAnswer("wordsearch", true);
+          if (rec.newBadges.length) game.newBadges.push(...rec.newBadges);
+          game.starsEarned++;
+          audio.correct();
+          const count = node.querySelector("#ws-count");
+          if (count) count.textContent = `🔍 Found ${game.found} / ${game.total}`;
+          if (game.found >= game.total) setTimeout(finishWordSearch, 700);
+          return;
+        }
+      }
+      audio.wrong();
+    }
+    grid.addEventListener("pointerdown", onDown);
+  }
+
+  function finishWordSearch() {
+    audio.fanfare();
+    celebrate(["🔍", "⭐", "🎉", "✨"]);
+    const node = el(`
+      <div class="screen">
+        ${header("All found!", { back: "home" })}
+        <div class="results-card">
+          <div class="results-medal">🏆</div>
+          <div class="results-msg">You found every word!</div>
+          <div class="results-score">${game.found} / ${game.total} words</div>
+          <div class="results-stars">You earned ⭐ ${game.starsEarned} stars</div>
+          <div class="results-actions">
+            <button class="big-btn go" data-action="again">New puzzle 🔁</button>
+            <button class="big-btn alt" data-nav="home">Home 🏠</button>
+          </div>
+        </div>
+      </div>
+    `);
+    const sourceId = game.sourceId;
+    on(node, "[data-action=again]", "click", () => {
+      audio.tap();
+      startWordSearch(sourceId);
+    });
+    wireNav(node);
+    render(node);
+    if (game.newBadges.length) badgeBurst(game.newBadges);
+  }
+
+  // =========================================================
   // SCREEN: Trophy room (badges + stats)
   // =========================================================
   function screenBadges() {
@@ -1040,6 +1253,7 @@
     home: screenHome,
     "math-setup": screenMathSetup,
     "spell-setup": screenSpellSetup,
+    "ws-setup": screenWSSetup,
     badges: screenBadges,
     parent: screenParent,
   };
