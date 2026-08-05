@@ -476,7 +476,7 @@
         <div class="listen-card">
           <button class="listen-btn" data-action="say" aria-label="Hear the word">🔊<span>Hear it</span></button>
           <div class="listen-tools">
-            ${hasSentence ? `<button class="tool-btn" data-action="sentence">💬 In a sentence</button>` : ""}
+            ${hasSentence ? `<button class="tool-btn" data-action="sentence">🔊 In a sentence</button>` : ""}
             <button class="tool-btn" data-action="hint">💡 Hint</button>
           </div>
           <div id="hintline" class="hintline"></div>
@@ -492,9 +492,10 @@
 
     const sayIt = () => audio.say(item.word);
     on(node, "[data-action=say]", "click", sayIt);
+    // "In a sentence" is audio-only on purpose: the kid hears the word used in
+    // context but never sees it spelled out. Only the Hint reveals letters.
     on(node, "[data-action=sentence]", "click", () => {
-      node.querySelector("#hintline").textContent = item.sentence;
-      audio.say(item.sentence.replace(new RegExp(item.word, "ig"), item.word), { rate: 0.92 });
+      audio.say(item.sentence, { rate: 0.9 });
     });
     on(node, "[data-action=hint]", "click", () => {
       node.querySelector("#hintline").textContent = spelling.hint(item.word);
@@ -670,6 +671,14 @@
             <span>Sound effects & read-aloud</span>
             <button id="mute" class="toggle ${audio.isMuted() ? "" : "on"}">${audio.isMuted() ? "OFF" : "ON"}</button>
           </label>
+          ${audio.canSpeak() ? `
+          <label class="field-label">Reading voice</label>
+          <div class="voice-row">
+            <select id="voice" class="select-input"></select>
+            <button class="mini-btn" data-action="testvoice">▶ Test</button>
+          </div>
+          <p class="muted small">Tip: phones can download extra "premium/enhanced" voices in their system settings — those sound the most natural.</p>
+          ` : `<p class="muted small">This browser can't read words aloud.</p>`}
         </div>
 
         ${p ? `
@@ -699,6 +708,30 @@
       e.currentTarget.textContent = nowMuted ? "OFF" : "ON";
       if (!nowMuted) audio.tap();
     });
+
+    // Populate the reading-voice dropdown. Voices can load a moment late on
+    // some browsers, so fill now and again shortly after.
+    const voiceSel = node.querySelector("#voice");
+    if (voiceSel) {
+      const fillVoices = () => {
+        const list = audio.listVoices();
+        if (!list.length) {
+          voiceSel.innerHTML = `<option value="">Default voice</option>`;
+          return;
+        }
+        const current = audio.currentVoiceURI();
+        voiceSel.innerHTML = list
+          .map((v) => `<option value="${esc(v.voiceURI)}" ${v.voiceURI === current ? "selected" : ""}>${esc(v.name)}</option>`)
+          .join("");
+      };
+      fillVoices();
+      setTimeout(fillVoices, 400);
+      voiceSel.addEventListener("change", () => {
+        audio.setVoice(voiceSel.value);
+        audio.say("Hi! Let's spell some words.");
+      });
+      on(node, "[data-action=testvoice]", "click", () => audio.say("Hi! Let's spell some words."));
+    }
 
     on(node, "[data-action=addlist]", "click", () => {
       const name = node.querySelector("#wlname").value.trim();

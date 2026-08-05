@@ -429,6 +429,21 @@ html, body {
 }
 .toggle.on { background: var(--good); color: #fff; }
 
+.voice-row { display: flex; gap: 10px; align-items: stretch; }
+.select-input {
+  flex: 1;
+  border: 3px solid #e6e8ff;
+  border-radius: 14px;
+  padding: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+}
+.select-input:focus { border-color: var(--switch); }
+.voice-row .mini-btn { padding: 0 16px; background: var(--switch); color: #fff; }
+
 .wl-list { margin-top: 14px; }
 .wl-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
 .wl-name { font-weight: 700; }
