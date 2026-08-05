@@ -463,6 +463,45 @@
 
     const progress = `${game.index + 1} / ${game.words.length}`;
     const hasSentence = !!item.sentence;
+    const player = store.getCurrent();
+    const useTiles = (player.spellInput || "keyboard") === "tiles";
+
+    // Answer area: either a text box or a set of letter tiles.
+    let answerArea;
+    if (useTiles) {
+      const answer = item.word.toLowerCase();
+      const letters = answer.split("");
+      // Older kids get a couple of extra "distractor" tiles for more challenge.
+      if (player.ageBand === "middle") {
+        const alphabet = "abcdefghijklmnopqrstuvwxyz";
+        for (let i = 0; i < 2; i++) {
+          letters.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+        }
+      }
+      shuffleInPlace(letters);
+      const slotsHtml = answer
+        .split("")
+        .map(() => `<span class="tile-slot"></span>`)
+        .join("");
+      const tilesHtml = letters
+        .map((L, i) => `<button type="button" class="tile" data-letter="${esc(L)}" data-tid="${i}">${esc(L)}</button>`)
+        .join("");
+      answerArea = `
+        <div class="tiles-area">
+          <div class="tile-slots">${slotsHtml}</div>
+          <div class="tile-tray">${tilesHtml}</div>
+          <div class="tiles-controls">
+            <button class="tool-btn" data-action="cleartiles">↺ Clear</button>
+            <button class="big-btn go" data-action="check" disabled>Check ✓</button>
+          </div>
+        </div>`;
+    } else {
+      answerArea = `
+        <div class="answer-typed">
+          <input id="spell" class="answer-input wide" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="type the word" />
+          <button class="big-btn go" data-action="check">Check ✓</button>
+        </div>`;
+    }
 
     const node = el(`
       <div class="screen play">
@@ -482,10 +521,7 @@
           <div id="hintline" class="hintline"></div>
         </div>
 
-        <div class="answer-typed">
-          <input id="spell" class="answer-input wide" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="type the word" />
-          <button class="big-btn go" data-action="check">Check ✓</button>
-        </div>
+        ${answerArea}
         <div id="feedback" class="feedback"></div>
       </div>
     `);
@@ -500,28 +536,36 @@
     on(node, "[data-action=hint]", "click", () => {
       node.querySelector("#hintline").textContent = spelling.hint(item.word);
     });
-    on(node, "[data-action=check]", "click", () => checkSpelling(node));
-    const inp = node.querySelector("#spell");
-    inp.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") checkSpelling(node);
-    });
+
+    if (useTiles) {
+      wireTiles(node);
+      on(node, '.tiles-controls [data-action="check"]', "click", () => checkSpellingTiles(node));
+      on(node, "[data-action=cleartiles]", "click", () => {
+        audio.tap();
+        returnAllTiles(node);
+      });
+    } else {
+      on(node, "[data-action=check]", "click", () => checkSpelling(node));
+      const inp = node.querySelector("#spell");
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") checkSpelling(node);
+      });
+    }
 
     wireNav(node);
     render(node);
     // Auto-speak the word so kids hear it right away.
     setTimeout(() => {
-      inp.focus();
+      const inp = node.querySelector("#spell");
+      if (inp) inp.focus();
       sayIt();
     }, 250);
   }
 
-  function checkSpelling(node) {
-    const inp = node.querySelector("#spell");
-    const guess = inp.value.trim().toLowerCase();
-    if (guess === "") {
-      inp.focus();
-      return;
-    }
+  // Shared scoring for a spelling attempt, used by both keyboard and tile
+  // input. `opts.lock()` disables the input controls after a final result;
+  // `opts.retry()` resets them so the child can try again.
+  function handleSpellingGuess(node, guess, opts) {
     const answer = game.current.word.toLowerCase();
     const fb = node.querySelector("#feedback");
 
@@ -535,8 +579,7 @@
       store.setStreakBest(game.bestStreak);
       audio.correct();
       fb.innerHTML = `<span class="fb-good">${pickPraise()} You spelled <b>${esc(answer)}</b>! +⭐</span>`;
-      inp.disabled = true;
-      node.querySelector("[data-action=check]").disabled = true;
+      opts.lock();
       if (game.streak > 0 && game.streak % 5 === 0) celebrate();
       game.index++;
       setTimeout(() => (game.index >= game.words.length ? finishRound() : nextSpelling()), 1000);
@@ -550,18 +593,83 @@
         store.setStreakBest(game.bestStreak);
         audio.wrong();
         fb.innerHTML = `<span class="fb-bad">The word was <b>${esc(answer)}</b>. You'll get it next time!</span>`;
-        inp.disabled = true;
-        node.querySelector("[data-action=check]").disabled = true;
+        opts.lock();
         game.index++;
         setTimeout(() => (game.index >= game.words.length ? finishRound() : nextSpelling()), 1800);
       } else {
         audio.wrong();
         fb.innerHTML = `<span class="fb-try">Not quite — try once more! 🎧</span>`;
         node.querySelector("#hintline").textContent = spelling.hint(answer);
-        inp.select();
+        opts.retry();
         audio.say(game.current.word);
       }
     }
+  }
+
+  // Keyboard input.
+  function checkSpelling(node) {
+    const inp = node.querySelector("#spell");
+    const guess = inp.value.trim().toLowerCase();
+    if (guess === "") {
+      inp.focus();
+      return;
+    }
+    handleSpellingGuess(node, guess, {
+      lock: () => {
+        inp.disabled = true;
+        node.querySelector("[data-action=check]").disabled = true;
+      },
+      retry: () => inp.select(),
+    });
+  }
+
+  // Letter-tile input: read the letters placed in the slots, in order.
+  function checkSpellingTiles(node) {
+    const slots = Array.from(node.querySelectorAll(".tile-slot"));
+    if (slots.some((s) => !s.querySelector(".tile"))) return; // not full yet
+    const guess = slots.map((s) => s.querySelector(".tile").dataset.letter).join("");
+    handleSpellingGuess(node, guess, {
+      lock: () => {
+        node.querySelectorAll(".tile, .tiles-controls button").forEach((b) => {
+          b.disabled = true;
+          b.classList.add("locked");
+        });
+      },
+      retry: () => returnAllTiles(node),
+    });
+  }
+
+  // Move every placed tile back to the tray.
+  function returnAllTiles(node) {
+    const tray = node.querySelector(".tile-tray");
+    node.querySelectorAll(".tile-slot .tile").forEach((t) => tray.appendChild(t));
+    const check = node.querySelector('.tiles-controls [data-action="check"]');
+    if (check) check.disabled = true;
+  }
+
+  // Wire tap-to-place behavior for the letter tiles.
+  function wireTiles(node) {
+    const area = node.querySelector(".tiles-area");
+    const tray = node.querySelector(".tile-tray");
+    const check = node.querySelector('.tiles-controls [data-action="check"]');
+    const slots = () => Array.from(node.querySelectorAll(".tile-slot"));
+
+    function refresh() {
+      check.disabled = !slots().every((s) => s.querySelector(".tile"));
+    }
+    area.addEventListener("click", (e) => {
+      const tile = e.target.closest(".tile");
+      if (!tile || tile.classList.contains("locked")) return;
+      audio.tap();
+      if (tile.parentElement.classList.contains("tile-slot")) {
+        tray.appendChild(tile); // tap a placed tile -> send back
+      } else {
+        const empty = slots().find((s) => !s.querySelector(".tile"));
+        if (empty) empty.appendChild(tile); // tap a tray tile -> next slot
+      }
+      refresh();
+    });
+    refresh();
   }
 
   // =========================================================
@@ -683,6 +791,16 @@
 
         ${p ? `
         <div class="card">
+          <h2 class="section-title flush">✏️ How ${esc(p.name)} answers spelling</h2>
+          <div class="age-pick">
+            <button class="age-btn ${(p.spellInput || "keyboard") === "keyboard" ? "sel" : ""}" data-input="keyboard">⌨️ Keyboard</button>
+            <button class="age-btn ${(p.spellInput || "keyboard") === "tiles" ? "sel" : ""}" data-input="tiles">🔤 Letter tiles</button>
+          </div>
+          <p class="muted small">Letter tiles let younger kids build the word by tapping letters into place — no keyboard needed.</p>
+        </div>` : ""}
+
+        ${p ? `
+        <div class="card">
           <h2 class="section-title flush">📝 Custom spelling words</h2>
           <p class="muted small">Add the words from ${esc(p.name)}'s spelling homework. Type or paste words separated by commas or new lines.</p>
           <input id="wlname" class="text-input" placeholder="List name (e.g. Week 5)" maxlength="30" />
@@ -700,6 +818,14 @@
         <p class="muted small center">All progress is saved on this device only. Nothing is sent anywhere.</p>
       </div>
     `);
+
+    on(node, "[data-input]", "click", (e) => {
+      audio.tap();
+      const mode = e.currentTarget.getAttribute("data-input");
+      store.updatePlayer(p.id, { spellInput: mode });
+      node.querySelectorAll("[data-input]").forEach((b) => b.classList.remove("sel"));
+      e.currentTarget.classList.add("sel");
+    });
 
     on(node, "#mute", "click", (e) => {
       const nowMuted = !audio.isMuted();
@@ -778,6 +904,14 @@
   const PRAISE = ["Great!", "Nice!", "Awesome!", "You got it!", "Woohoo!", "Brilliant!", "Yes!", "Superb!", "Way to go!"];
   function pickPraise() {
     return PRAISE[Math.floor(Math.random() * PRAISE.length)];
+  }
+
+  function shuffleInPlace(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
   }
 
   function wireNav(node) {

@@ -444,6 +444,63 @@ html, body {
 .select-input:focus { border-color: var(--switch); }
 .voice-row .mini-btn { padding: 0 16px; background: var(--switch); color: #fff; }
 
+/* ---------- letter tiles ---------- */
+.tiles-area { margin-top: 4px; }
+.tile-slots, .tile-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.tile-slots {
+  min-height: 58px;
+  margin-bottom: 16px;
+}
+.tile-tray {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 16px;
+  padding: 12px;
+  min-height: 58px;
+}
+.tile-slot {
+  width: 54px;
+  height: 54px;
+  border: 3px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.12);
+}
+.tile {
+  width: 54px;
+  height: 54px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(150deg, #ffd85e, #ffb01f);
+  color: #6a4b00;
+  font-size: 1.7rem;
+  font-weight: 800;
+  font-family: inherit;
+  text-transform: lowercase;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform 0.1s;
+}
+.tile:active { transform: scale(0.9); }
+.tile-slot .tile {
+  background: linear-gradient(150deg, #45d4b6, #23a58c);
+  color: #fff;
+}
+.tile.locked { cursor: default; opacity: 0.9; }
+.tiles-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+}
+.tiles-controls .big-btn { margin-top: 0; width: auto; padding: 14px 28px; }
+.tiles-controls .tool-btn { padding: 12px 18px; }
+
 .wl-list { margin-top: 14px; }
 .wl-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
 .wl-name { font-weight: 700; }

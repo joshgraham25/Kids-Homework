@@ -61,6 +61,7 @@
         name: (name || "Hero").trim().slice(0, 16) || "Hero",
         avatar: avatar || AVATARS[0],
         ageBand: ageBand || "young", // "young" (5-7) or "middle" (8-10)
+        spellInput: "keyboard", // "keyboard" or "tiles" (how they answer spelling)
         stars: 0,
         badges: [],
         streakBest: 0,
