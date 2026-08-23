@@ -192,6 +192,22 @@
     const p = store.getCurrent();
     if (!p) return go("profiles");
 
+    const fd = HW.facts ? HW.facts.today() : null;
+    let factOffset = 0;
+    const currentFact = () => fd.facts[(fd.index + factOffset) % fd.facts.length];
+
+    const factCard = fd
+      ? `
+        <div class="fact-card">
+          <div class="fact-head"><span class="fact-emoji">${fd.emoji}</span><span class="fact-label">${esc(fd.label)}</span></div>
+          <div class="fact-text" id="fact-text">${esc(currentFact())}</div>
+          <div class="fact-actions">
+            <button class="tool-btn" data-action="factsay">🔊 Hear it</button>
+            <button class="tool-btn" data-action="factmore">🔀 Another</button>
+          </div>
+        </div>`
+      : "";
+
     const node = el(`
       <div class="screen">
         ${header("Hi, " + p.name + "!")}
@@ -202,6 +218,8 @@
             <div class="welcome-sub">${p.badges.length} badge${p.badges.length === 1 ? "" : "s"} earned</div>
           </div>
         </div>
+
+        ${factCard}
 
         <h2 class="section-title">Pick a game</h2>
         <div class="subject-grid">
@@ -233,6 +251,20 @@
         </div>
       </div>
     `);
+
+    if (fd) {
+      on(node, "[data-action=factsay]", "click", () => audio.say(currentFact(), { rate: 0.92 }));
+      on(node, "[data-action=factmore]", "click", () => {
+        audio.tap();
+        factOffset++;
+        const t = node.querySelector("#fact-text");
+        t.textContent = currentFact();
+        t.classList.remove("pulse");
+        void t.offsetWidth; // restart the little pop animation
+        t.classList.add("pulse");
+      });
+    }
+
     wireNav(node);
     render(node);
   }

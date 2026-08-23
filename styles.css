@@ -148,6 +148,30 @@ html, body {
 .welcome-line { font-size: 1.1rem; }
 .welcome-sub { color: var(--muted); font-size: 0.9rem; }
 
+/* ---------- fact of the day ---------- */
+.fact-card {
+  background: linear-gradient(150deg, #fff5d1, #ffe8a8);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-top: 14px;
+  box-shadow: var(--shadow);
+  border: 3px solid #ffd96b;
+}
+.fact-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.fact-emoji { font-size: 1.5rem; }
+.fact-label {
+  font-weight: 800;
+  color: #a35b00;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.95rem;
+}
+.fact-text { color: #5a4300; font-size: 1.15rem; font-weight: 700; line-height: 1.35; }
+.fact-text.pulse { animation: factpop 0.35s ease; }
+@keyframes factpop { from { opacity: 0.2; transform: scale(0.98); } to { opacity: 1; transform: none; } }
+.fact-actions { display: flex; gap: 10px; margin-top: 12px; }
+.fact-actions .tool-btn { background: #ffffffcc; }
+
 /* ---------- cards & forms ---------- */
 .card {
   background: var(--card);
